@@ -11,6 +11,7 @@
 #include <unistd.h>
 
 #include "kill.h"
+#include "log.h"
 
 extern int enable_debug;
 
@@ -140,25 +141,25 @@ static void userspace_kill(DIR *procdir, int sig, int ignore_oom_score_adj, int 
 			badness -= p.oom_score_adj;
 
 		if(enable_debug)
-			printf("pid %5d: badness %3d vm_rss %6lu\n", pid, badness, p.vm_rss);
+			LOG("pid %5d: badness %3d vm_rss %6lu", pid, badness, p.vm_rss);
 
 		if(badness > victim_badness)
 		{
 			victim_pid = pid;
 			victim_badness = badness;
 			if(enable_debug)
-				printf("    ^ new victim (higher badness)\n");
+				LOG("    ^ new victim (higher badness)");
 		} else if(badness == victim_badness && p.vm_rss > victim_vm_rss) {
 			victim_pid = pid;
 			victim_vm_rss = p.vm_rss;
 			if(enable_debug)
-				printf("    ^ new victim (higher vm_rss)\n");
+				LOG("    ^ new victim (higher vm_rss)");
 		}
 	}
 
 	if(victim_pid == 0)
 	{
-		fprintf(stderr, "Error: Could not find a process to kill. Sleeping 10 seconds.\n");
+		LOG("Error: Could not find a process to kill. Sleeping 10 seconds.\n");
 		sleep(10);
 		return;
 	}
@@ -171,12 +172,12 @@ static void userspace_kill(DIR *procdir, int sig, int ignore_oom_score_adj, int 
 
 	if(dry_run)
 	{
-		fprintf(stderr, "Would kill process %d %s\n", victim_pid, name);
+		LOG("Would kill process %d %s", victim_pid, name);
 		return;
 	}
 
 	if(sig != 0)
-		fprintf(stderr, "Killing process %d %s\n", victim_pid, name);
+		LOG("Killing process %d %s", victim_pid, name);
 
 	if(kill(victim_pid, sig) != 0)
 	{
@@ -184,7 +185,7 @@ static void userspace_kill(DIR *procdir, int sig, int ignore_oom_score_adj, int 
 		// Killing the process may have failed because we are not running as root.
 		// In that case, trying again in 100ms will just yield the same error.
 		// Throttle ourselves to not spam the log.
-		fprintf(stderr, "Sleeping 10 seconds\n");
+		LOG("Sleeping 10 seconds");
 		sleep(10);
 	}
 }
@@ -215,11 +216,11 @@ void trigger_kernel_oom(int sig)
 	}
 	if(sig == 9)
 	{
-		fprintf(stderr, "Invoking oom killer: ");
-		if(fprintf(trig_fd, "f\n") != 2)
-			perror("failed");
-		else
-			fprintf(stderr, "done\n");
+		if(fprintf(trig_fd, "f\n") != 2) {
+			LOG("Failed to invoke OOM killer: %s", strerror(errno));
+		} else {
+			LOG("Invoked OOM killer");
+		}
 	}
 	fclose(trig_fd);
 }

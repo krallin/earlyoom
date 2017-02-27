@@ -8,6 +8,7 @@
 #include <stddef.h>                     // for size_t
 
 #include "meminfo.h"
+#include "log.h"
 
 /* Parse the contents of /proc/meminfo (in buf), return value of "*name" */
 static long get_entry(const char *name, const char *buf) {
@@ -29,7 +30,7 @@ static long get_entry(const char *name, const char *buf) {
 static long get_entry_fatal(const char *name, const char *buf) {
 	long val = get_entry(name, buf);
 	if(val == -1) {
-		fprintf(stderr, "Could not find \"%s\"\n", name);
+		LOG("Could not find \"%s\"", name);
 		exit(104);
 	}
 	return val;
@@ -75,8 +76,8 @@ struct meminfo parse_meminfo() {
 	if(m.MemAvailable == -1) {
 		m.MemAvailable = available_guesstimate(buf);
         if(guesstimate_warned == 0) {
-			fprintf(stderr, "Warning: Your kernel does not provide MemAvailable data (needs 3.14+)\n"
-			                "         Falling back to guesstimate\n");
+			LOG("Warning: Your kernel does not provide MemAvailable data (needs 3.14+)\n"
+			                "         Falling back to guesstimate.");
 			guesstimate_warned = 1;
         }
     }

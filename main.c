@@ -12,13 +12,16 @@
 
 #include "meminfo.h"
 #include "kill.h"
+#include "log.h"
+
+#define LOG_INTERVAL 100
+#define THROTTLE_INTERVAL 5
 
 int enable_debug = 0;
 
 int main(int argc, char *argv[])
 {
 	int kernel_oom_killer = 0;
-	unsigned long oom_cnt = 0;
 	/* If the available memory goes below this percentage, we start killing
 	 * processes. 10 is a good start. */
 	int mem_min_percent = 10, swap_min_percent = 10;
@@ -74,9 +77,11 @@ int main(int argc, char *argv[])
 				break;
 			case 'i':
 				ignore_oom_score_adj = 1;
+				fprintf(stderr, "Ignoring OOM score adjustment\n");
 				break;
 			case 'r':
 				dry_run = 1;
+				fprintf(stderr, "Enabling dry-run mode\n");
 				break;
 			case 'd':
 				enable_debug = 1;
@@ -115,10 +120,8 @@ int main(int argc, char *argv[])
 	mem_min = m.MemTotal * mem_min_percent / 100;
 	swap_min = m.SwapTotal * swap_min_percent / 100;
 
-	fprintf(stderr, "mem total: %lu MiB, min: %lu MiB (%d %%)\n",
-		m.MemTotal / 1024, mem_min / 1024, mem_min_percent);
-	fprintf(stderr, "swap total: %lu MiB, min: %lu MiB (%d %%)\n",
-		m.SwapTotal / 1024, swap_min / 1024, swap_min_percent);
+	LOG("mem total: %lu MiB, min: %lu MiB (%d %%)", m.MemTotal / 1024, mem_min / 1024, mem_min_percent);
+	LOG("swap total: %lu MiB, min: %lu MiB (%d %%)", m.SwapTotal / 1024, swap_min / 1024, swap_min_percent);
 
 	/* Dry-run oom kill to make sure stack grows to maximum size before
 	 * calling mlockall()
@@ -138,32 +141,33 @@ int main(int argc, char *argv[])
 	{
 		m = parse_meminfo();
 
-		if(c % 100 == 0)
+		if(c % LOG_INTERVAL == 0)
 		{
 			int swap_free_percent = 0;
 			if (m.SwapTotal > 0)
 				swap_free_percent = m.SwapFree * 100 / m.SwapTotal;
 
-			printf("mem avail: %lu MiB (%ld %%), swap free: %lu MiB (%d %%)\n",
+			LOG(
+				"mem avail: %lu MiB (%ld %%), swap free: %lu MiB (%d %%)",
 				m.MemAvailable / 1024, m.MemAvailable * 100 / m.MemTotal,
-				m.SwapFree / 1024, swap_free_percent);
+				m.SwapFree / 1024, swap_free_percent
+			);
 			c=0;
 		}
+
 		c++;
 
 		if(m.MemAvailable <= mem_min && m.SwapFree <= swap_min)
 		{
-			fprintf(stderr, "Out of memory! avail: %lu MiB < min: %lu MiB\n",
-				m.MemAvailable / 1024, mem_min / 1024);
-
-			if (!clock_gettime(CLOCK_MONOTONIC, &this_kill) && ((this_kill.tv_sec - last_kill.tv_sec) < 5)) {
-				fprintf(stderr, "Throttled\n");
+			if (!clock_gettime(CLOCK_MONOTONIC, &this_kill) && ((this_kill.tv_sec - last_kill.tv_sec) < THROTTLE_INTERVAL)) {
+				// Throttled
 			} else {
+				LOG("Out of memory! avail: %lu MiB < min: %lu MiB", m.MemAvailable / 1024, mem_min / 1024);
+
 				handle_oom(procdir, 9, kernel_oom_killer, ignore_oom_score_adj, dry_run);
 				if (clock_gettime(CLOCK_MONOTONIC, &last_kill)) {
 					memset(&last_kill, 0, sizeof(last_kill));
 				};
-				oom_cnt++;
 			}
 		}
 		
