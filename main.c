@@ -8,6 +8,7 @@
 #include <dirent.h>
 #include <stdlib.h>
 #include <sys/mman.h>
+#include <time.h>
 
 #include "meminfo.h"
 #include "kill.h"
@@ -127,6 +128,11 @@ int main(int argc, char *argv[])
 	if(mlockall(MCL_CURRENT|MCL_FUTURE) !=0 )
 		perror("Could not lock memory - continuing anyway");
 
+	struct timespec last_kill, this_kill;
+
+	memset(&last_kill, 0, sizeof(last_kill));
+	memset(&this_kill, 0, sizeof(this_kill));
+
 	c = 1; // Start at 1 so we do not print another status line immediately
 	while(1)
 	{
@@ -149,8 +155,16 @@ int main(int argc, char *argv[])
 		{
 			fprintf(stderr, "Out of memory! avail: %lu MiB < min: %lu MiB\n",
 				m.MemAvailable / 1024, mem_min / 1024);
-			handle_oom(procdir, 9, kernel_oom_killer, ignore_oom_score_adj, dry_run);
-			oom_cnt++;
+
+			if (!clock_gettime(CLOCK_MONOTONIC, &this_kill) && ((this_kill.tv_sec - last_kill.tv_sec) < 5)) {
+				fprintf(stderr, "Throttled\n");
+			} else {
+				handle_oom(procdir, 9, kernel_oom_killer, ignore_oom_score_adj, dry_run);
+				if (clock_gettime(CLOCK_MONOTONIC, &last_kill)) {
+					memset(&last_kill, 0, sizeof(last_kill));
+				};
+				oom_cnt++;
+			}
 		}
 		
 		usleep(100000); // 100ms

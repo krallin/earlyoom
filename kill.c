@@ -171,12 +171,12 @@ static void userspace_kill(DIR *procdir, int sig, int ignore_oom_score_adj, int 
 
 	if(dry_run)
 	{
-		fprintf(stderr, "Would kill process %d: %s\n", victim_pid, name);
+		fprintf(stderr, "Would kill process %d %s\n", victim_pid, name);
 		return;
 	}
 
 	if(sig != 0)
-		fprintf(stderr, "Killing process %d: %s\n", victim_pid, name);
+		fprintf(stderr, "Killing process %d %s\n", victim_pid, name);
 
 	if(kill(victim_pid, sig) != 0)
 	{
