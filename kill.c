@@ -93,7 +93,7 @@ static struct procinfo get_process_stats(int pid)
  * Find the process with the largest oom_score and kill it.
  * See trigger_kernel_oom() for the reason why this is done in userspace.
  */
-static void userspace_kill(DIR *procdir, int sig, int ignore_oom_score_adj)
+static void userspace_kill(DIR *procdir, int sig, int ignore_oom_score_adj, int dry_run)
 {
 	struct dirent * d;
 	char buf[256];
@@ -169,8 +169,14 @@ static void userspace_kill(DIR *procdir, int sig, int ignore_oom_score_adj)
 	fscanf(stat, "%*d %s", name);
 	fclose(stat);
 
+	if(dry_run)
+	{
+		fprintf(stderr, "Would kill process %d: %s\n", victim_pid, name);
+		return;
+	}
+
 	if(sig != 0)
-		fprintf(stderr, "Killing process %d %s\n", victim_pid, name);
+		fprintf(stderr, "Killing process %d: %s\n", victim_pid, name);
 
 	if(kill(victim_pid, sig) != 0)
 	{
@@ -218,10 +224,10 @@ void trigger_kernel_oom(int sig)
 	fclose(trig_fd);
 }
 
-void handle_oom(DIR * procdir, int sig, int kernel_oom_killer, int ignore_oom_score_adj)
+void handle_oom(DIR * procdir, int sig, int kernel_oom_killer, int ignore_oom_score_adj, int dry_run)
 {
 	if(kernel_oom_killer)
 		trigger_kernel_oom(sig);
 	else
-		userspace_kill(procdir, sig, ignore_oom_score_adj);
+		userspace_kill(procdir, sig, ignore_oom_score_adj, dry_run);
 }
